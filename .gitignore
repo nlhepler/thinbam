@@ -1,0 +1,6 @@
+*.pyc
+*~
+thinbam.egg-info
+dist
+build
+data
