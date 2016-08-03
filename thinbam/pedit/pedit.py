@@ -40,11 +40,12 @@ def _validateInternalMode( bam_file ):
 		sys.exit(1)
 
 def _exciseRejectedBaseInfo ( subread, accept_ixs, reject_ixs ):
-	by_base_tags = ['dq', 'dt', 'iq', 'mq', 'sq', 'st', 'ip', 'pw', 'pv']
+	#by_base_tags = ['dq', 'dt', 'iq', 'mq', 'sq', 'st', 'ip', 'pw', 'pv']
+	by_base_tags = ['ip', 'pw']
 
 	if reject_ixs:
-		ipd = subread.get_tag( 'pd' ); ipd_type_code = ipd.typecode
-		pw  = subread.get_tag( 'px' )
+		ipd = subread.get_tag( 'ip' ); ipd_type_code = ipd.typecode
+		pw  = subread.get_tag( 'pw' )
 
 		# include ipd/pw from rejected pulses into next accepted basecall
 		for index in reversed( accept_ixs ):
@@ -54,7 +55,7 @@ def _exciseRejectedBaseInfo ( subread, accept_ixs, reject_ixs ):
 					ipd[ index ] += ipd[ reject ] + pw[ reject ]
 					reject -= 1
 				except OverflowError:
-					ipd[ index ] = 65535
+					ipd[ index ] = 255
 					reject -= 1
 
 		ipd = np.array( ipd )
@@ -80,34 +81,22 @@ def _exciseRejectedBaseInfo ( subread, accept_ixs, reject_ixs ):
 	return subread
 
 def _setSubreadTagsThinned( subread ):
-	pw = subread.get_tag( 'px' )
+	pw = subread.get_tag( 'pw' )
 	accept_indices = [ ix for ix,pulse_width in enumerate( pw ) if pulse_width > 1 ] 
 	reject_indices = [ ix for ix,pulse_width in enumerate( pw ) if pulse_width <= 1 ]
 	if reject_indices and (len( pw ) - len( reject_indices )) > 0:
 
 		subread = _exciseRejectedBaseInfo( subread, accept_indices, reject_indices )
-		pc = subread.get_tag( 'pc' ); pc_cp = '';
-		for pulse_index,pulse_call in enumerate( pc ):
-			if pulse_index in reject_indices:
-				pc_cp += pulse_call.lower()
-			else:
-				pc_cp += pulse_call	
-
-		subread.set_tag( 'pc', pc_cp )
-
-		ixs = [ ix for ix,base in enumerate( pc_cp ) if not base.islower() ] # get indices of all pulsecalls that weren't lowercase (i.e. rejected as bases)
-		subread.seq  = ''.join( [ subread.seq[i] for i in ixs ] )
-		subread.qual = ''.join( [ '=' for i in ixs ] )
+		subread.seq  = ''.join( [ subread.seq[i] for i in accept_indices ] )
+		subread.qual = ''.join( [ '=' for i in accept_indices ] )
 		query_name = subread.query_name.split( '_' )
 		query_end = int( query_name[-1] )
-		deficit = len( pc ) - len( subread.seq )
+		deficit = len( pw ) - len( subread.seq )
 		query_end = query_end - deficit # correct end of query by number of rejected pulses
 		subread.set_tag( 'qe', query_end )
 		query_name[-1] = str( query_end )
 		query_name = '_'.join( query_name )
 		subread.query_name = query_name
-
-	
 
 	return subread
 
